@@ -274,7 +274,7 @@
       const legendItems = rows.map((r) => `<li><span class="sw" style="background:${barFill(r, rows, pal)}"></span><span class="t">${E(r.name)} (${C.fmt(r.value)} ${E(u)})</span></li>`).join('');
       const pf = {
         copy: `<button class="btn sm noprint" data-act="copychart">${I('copy', 14)}<span>Copy chart (PNG)</span></button>`,
-        chart: `<div class="chartbox" id="chartbox"></div>`,
+        chart: `<h3 class="ev-table-title" data-role="profile-title-preview" ${tableTitle ? '' : 'hidden'}>${E(tableTitle)}</h3><div class="chartbox" id="chartbox"></div>`,
         legend: `<aside class="legend"><p><b>Acceptance:</b> ${E(ev.metric.name)} ${ev.refValue !== null ? `${lower ? '≤' : '≥'} ${C.fmt(ev.refValue)} ${E(u)} (${E(ev.ref.name)})` : '— no limit set'}. ${lower ? 'Lower' : 'Higher'} values are better.</p>
           <ul>${ev.refValue !== null ? `<li><span class="ln"></span><span class="t">${E(ev.ref.name)} (${C.fmt(ev.refValue)} ${E(u)})</span></li>` : ''}${legendItems}</ul></aside>`,
         hint: `${E(ev.metric.name)} (${E(u)}) · zero-based shared scale`,
@@ -328,8 +328,39 @@
       const plate = exportSvg.querySelector('rect'); if (plate) plate.setAttribute('fill', '#ffffff');
       const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(exportSvg));
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-      const c = document.createElement('canvas'); c.width = vb.width * 2; c.height = vb.height * 2;
-      const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+      const title = (tableTitles[kk()] || '').trim();
+      const c = document.createElement('canvas'); c.width = vb.width * 2;
+      // The copied PNG should include the same optional title as the on-screen profile.
+      const ctx = c.getContext('2d');
+      const titleLines = [];
+      if (title) {
+        ctx.font = '600 38px "Segoe UI", Arial, sans-serif';
+        const maxWidth = c.width - 64;
+        let line = '';
+        for (const word of title.split(/\s+/)) {
+          const proposal = line ? line + ' ' + word : word;
+          if (ctx.measureText(proposal).width <= maxWidth) { line = proposal; continue; }
+          if (line) { titleLines.push(line); line = ''; }
+          let segment = '';
+          for (const char of word) {
+            if (segment && ctx.measureText(segment + char).width > maxWidth) {
+              titleLines.push(segment); segment = '';
+            }
+            segment += char;
+          }
+          line = segment;
+        }
+        if (line) titleLines.push(line);
+      }
+      const titleHeight = titleLines.length ? titleLines.length * 50 + 28 : 0;
+      c.height = vb.height * 2 + titleHeight;
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+      if (titleLines.length) {
+        ctx.font = '600 38px "Segoe UI", Arial, sans-serif';
+        ctx.fillStyle = '#1b1d1a';
+        titleLines.forEach((line, i) => ctx.fillText(line, 32, 48 + i * 50));
+      }
+      ctx.drawImage(img, 0, titleHeight, vb.width * 2, vb.height * 2);
       return new Promise((res) => c.toBlob(res, 'image/png'));
     }
 
@@ -353,8 +384,10 @@
       });
       else if (a === 'tabletitle') {
         tableTitles[kk()] = el.value;
-        const preview = app.querySelector('[data-role="table-title-preview"]');
-        if (preview) { preview.textContent = el.value.trim(); preview.hidden = !el.value.trim(); }
+        for (const preview of app.querySelectorAll('[data-role="table-title-preview"], [data-role="profile-title-preview"]')) {
+          preview.textContent = el.value.trim();
+          preview.hidden = !el.value.trim();
+        }
       }
       else if (a === 'refname') typing(() => C.setRef({ name: el.value }));
       else if (a === 'refval') typing(() => C.setRef({ value: el.value }));
