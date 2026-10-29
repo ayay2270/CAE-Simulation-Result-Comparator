@@ -15,6 +15,7 @@
       { key: 'stress', name: 'Max Stress', unit: 'MPa', refName: 'Yield Stress', ref: 295, direction: 'lower' },
       { key: 'disp', name: 'Displacement', unit: 'mm', refName: 'Allowable Deflection', ref: 1.75, direction: 'lower' },
       { key: 'strain', name: 'Max Plastic Strain', unit: '%', refName: 'Strain Limit', ref: 0.8, direction: 'lower' },
+      { key: 'blank', name: '', unit: '', refName: '', ref: null, direction: 'lower', custom: true },
     ],
     variants: [
       { id: 'v1', name: 'Original Design', note: 'As-built geometry, t = 2.0 mm', parent: null },
@@ -84,7 +85,8 @@
   function evaluate(caseKey) {
     const [a, m] = caseKey ? caseKey.split('|') : [S.current.analysis, S.current.metric];
     const c = ensureCase(a, m);
-    const met = metricByKey(m);
+    const originalMetric = metricByKey(m);
+    const met = originalMetric.name ? originalMetric : { ...originalMetric, name: 'Custom metric' };
     const dir = c.direction;
     const ref = c.ref && c.ref.on && Number.isFinite(c.ref.value) ? c.ref.value : null;
     const baseV = c.values[S.baselineId] ?? null;
