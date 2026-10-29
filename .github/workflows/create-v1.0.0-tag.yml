@@ -1,0 +1,26 @@
+name: Create one-time release tag v1.0.0
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/create-v1.0.0-tag.yml']
+permissions:
+  contents: write
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag reviewed merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git show-ref --verify --quiet refs/tags/v1.0.0; then
+            echo 'v1.0.0 already exists; no changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a v1.0.0 9537662afc6e9946b212402fe937cd9d3d7bfefa -m 'v1.0.0: Blank Metric, white-background copy exports and wider chart bar spacing'
+          git push origin refs/tags/v1.0.0
