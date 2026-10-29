@@ -53,6 +53,7 @@
     let approachOpen = false, undoMsg = '', undoT = null;
     let custom = {};                    // caseKey -> manually edited conclusion HTML
     let extra = {};                     // caseKey -> [{id, text}] free remarks
+    let tableTitles = {};               // caseKey -> optional evidence table title
     let seq = 0;
     let last = null, rendering = false, pointerDown = false, resortT = null, resizeT = null, lastW = 0;
 
@@ -132,13 +133,37 @@
     }
     function chartSvg(ev, rows, W, P) {
       P = P || pal;
-      const u = ev.unit, narrow = W < 640, padL = narrow ? 118 : 176, padR = narrow ? 54 : 70, top = 44, pitch = 44, barH = 22, axisH = 52;
+      const u = ev.unit, narrow = W < 640, padL = narrow ? 118 : 176, padR = narrow ? 54 : 70, pitch = 44, barH = 22, axisH = 52;
+      const title = (tableTitles[kk()] || '').trim().replace(/\s+/g, ' ');
+      const titleLines = [];
+      if (title) {
+        const chars = Array.from(title), maxChars = Math.max(15, Math.floor((W - 40) / 12));
+        for (let i = 0; i < chars.length;) {
+          let end = Math.min(chars.length, i + maxChars);
+          if (end < chars.length) {
+            let split = end;
+            while (split > i && chars[split] !== ' ') split--;
+            if (split > i) end = split;
+          }
+          const text = chars.slice(i, end).join('').trim();
+          if (text) titleLines.push(text);
+          i = end;
+          while (chars[i] === ' ') i++;
+        }
+      }
+      // Keep the title inside the SVG, centered above the bars and acceptance-limit label.
+      const top = 44 + (titleLines.length ? 42 + (titleLines.length - 1) * 28 : 0);
       const H = top + rows.length * pitch + axisH;
       const vals = rows.map((r) => r.value ?? 0).concat(ev.refValue !== null ? [ev.refValue] : []);
       const step = niceStep((Math.max(...vals, 1e-9) * 1.12) / 7), max = Math.ceil((Math.max(...vals, 1e-9) * 1.08) / step) * step;
       const x = (v) => padL + (v / max) * (W - padL - padR);
       const y0 = top, y1 = top + rows.length * pitch;
       let g = `<rect width="${W}" height="${H}" fill="${P.bg}"/>`;
+      if (titleLines.length) {
+        g += `<g role="presentation" data-role="svg-chart-title" fill="${P.ink}" font-size="20" font-weight="700" text-anchor="middle">`;
+        titleLines.forEach((line, i) => { g += `<text x="${W / 2}" y="${30 + i * 28}">${E(line)}</text>`; });
+        g += '</g>';
+      }
       for (let t = 0; t <= max + 1e-9; t += step) {
         g += `<line x1="${x(t)}" x2="${x(t)}" y1="${y0 - 6}" y2="${y1}" stroke="${P.grid}" stroke-width="1"/>`;
         g += `<text x="${x(t)}" y="${y1 + 20}" font-size="13" text-anchor="middle" fill="${P.tick}">${C.fmt(+t.toFixed(6))}</text>`;
@@ -233,6 +258,7 @@
       kpi.row = `<div class="kpis">${kpi.result}${kpi.improvement}${kpi.margin}</div>`;
 
       // 02 evidence
+      const tableTitle = (tableTitles[kk()] || '').trim();
       const body = rows.map((r) => {
         const chg = r.isBaseline ? `<span class="chg z">—</span><span class="chg-s">Reference design</span>`
           : r.deltaPct === null ? `<span class="chg z">—</span>`
@@ -261,7 +287,9 @@
       const evid = {
         sort: `<div class="seg noprint" role="group" aria-label="Row order"><button data-act="sort" data-v="result" aria-pressed="${sortMode === 'result'}">By result</button><button data-act="sort" data-v="input" aria-pressed="${sortMode === 'input'}">Input order</button></div><button class="btn sm noprint" data-act="copytable">${I('copy', 14)}<span>Copy table</span></button>`,
         add: `<button class="btn noprint" data-act="add">${I('plus', 15)}Add design variant</button>`,
-        table: `<div class="tw"><div class="twi"><table class="ev"><thead><tr>
+        table: `<div class="ev-title-editor noprint"><label for="evidence-table-title">Table title <span>(optional)</span></label><input id="evidence-table-title" data-k="tabletitle" data-act="tabletitle" type="text" autocomplete="off" placeholder="e.g. Rail tensile comparison" value="${E(tableTitles[kk()] || '')}" aria-label="Optional table title"></div>
+        <h3 class="ev-table-title" data-role="table-title-preview" ${tableTitle ? '' : 'hidden'}>${E(tableTitle)}</h3>
+        <div class="tw"><div class="twi"><table class="ev"><thead><tr>
           <th>Role / rank</th><th>Design</th><th>Description</th><th class="r">Result<small>(${E(u)})</small></th><th>Change vs baseline</th><th>Reference margin<small>(to ${E(ev.refValue !== null ? C.fmt(ev.refValue) + ' ' + u : 'limit')})</small></th><th>State</th><th class="act">Actions</th>
         </tr></thead><tbody>${body}</tbody></table></div></div>`,
       };
@@ -324,8 +352,10 @@
       const plate = exportSvg.querySelector('rect'); if (plate) plate.setAttribute('fill', '#ffffff');
       const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(exportSvg));
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
+      // Export the exact SVG contents, including its centered title, without a second heading.
       const c = document.createElement('canvas'); c.width = vb.width * 2; c.height = vb.height * 2;
-      const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height);
+      ctx.drawImage(img, 0, 0, c.width, c.height);
       return new Promise((res) => c.toBlob(res, 'image/png'));
     }
 
@@ -347,6 +377,12 @@
         const met = C.metricByKey(C.state.current.metric);
         met.customUnit = true; met.unit = el.value; met.customUnitText = el.value; C.emit();
       });
+      else if (a === 'tabletitle') {
+        tableTitles[kk()] = el.value;
+        const preview = app.querySelector('[data-role="table-title-preview"]');
+        if (preview) { preview.textContent = el.value.trim(); preview.hidden = !el.value.trim(); }
+        drawChart();
+      }
       else if (a === 'refname') typing(() => C.setRef({ name: el.value }));
       else if (a === 'refval') typing(() => C.setRef({ value: el.value }));
       else if (a === 'xrem') { const x = (extra[kk()] || []).find((y) => y.id === id); if (x) x.text = el.value; }
@@ -385,7 +421,7 @@
       const el = e.target.closest('[data-act]'); if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
       const a = el.dataset.act, id = el.dataset.id;
       if (a === 'print') window.print();
-      else if (a === 'reset') { custom = {}; extra = {}; open = new Set(); undoMsg = ''; C.reset(); }
+      else if (a === 'reset') { custom = {}; extra = {}; tableTitles = {}; open = new Set(); undoMsg = ''; C.reset(); }
       else if (a === 'approach') { approachOpen = !approachOpen; render(); }
       else if (a === 'sort') { sortMode = el.dataset.v; render(); }
       else if (a === 'base') C.setBaseline(id);
@@ -407,8 +443,10 @@
         ]);
         const cellStyle = 'background-color:#ffffff!important;color:#111111;border:1px solid #cccccc;padding:7px 10px;text-align:left;';
         const cells = (items, tag) => '<tr>' + items.map((x) => '<' + tag + ' style="' + cellStyle + '">' + E(x) + '</' + tag + '>').join('') + '</tr>';
-        const html = '<table style="border-collapse:collapse;background-color:#ffffff;color:#111111;">' + cells(headers, 'th') + values.map((row) => cells(row, 'td')).join('') + '</table>';
-        const plain = [headers, ...values].map((row) => row.join('\t')).join('\n');
+        const tableTitle = (tableTitles[kk()] || '').trim();
+        const caption = tableTitle ? '<caption style="caption-side:top;text-align:left;background-color:#ffffff;color:#111111;font-size:18px;font-weight:700;padding:10px 0;">' + E(tableTitle) + '</caption>' : '';
+        const html = '<table style="border-collapse:collapse;background-color:#ffffff;color:#111111;">' + caption + cells(headers, 'th') + values.map((row) => cells(row, 'td')).join('') + '</table>';
+        const plain = (tableTitle ? tableTitle + '\n' : '') + [headers, ...values].map((row) => row.join('\t')).join('\n');
         flashBtn(el, await copyRich(html, plain), 'Copy table');
       }
       else if (a === 'copyconcl') { const d = document.getElementById('concl'); flashBtn(el, await copyRich(`<p>${d.innerHTML}</p>`, d.innerText.trim()), 'Copy to report'); }

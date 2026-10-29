@@ -105,6 +105,13 @@ button, select, input, .ti, .ctext, .btn, .badge, tr { transition: background-co
 .k-result .badge.f { background: var(--fail-bg); color: var(--fail); }
 
 /* 02 evidence */
+.ev-title-editor { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin: 0 0 14px; }
+.ev-title-editor label { font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.ev-title-editor label span { color: var(--ink-3); font-weight: 400; }
+.ev-title-editor input { flex: 1 1 260px; max-width: 450px; min-width: 180px; height: 38px; padding: 0 14px; border: 1px solid var(--line-2); border-radius: var(--r-sm); background: var(--field-bg); color: var(--ink); font: 500 14px var(--font); }
+.ev-title-editor input:focus { outline: 2px solid var(--moss-d); outline-offset: 1px; }
+.ev-table-title { margin: 4px 0 14px; font-family: var(--font-head); font-size: 22px; font-weight: 600; line-height: 1.3; color: var(--ink); overflow-wrap: anywhere; }
+.ev-table-title[hidden] { display: none; }
 .twi { border-radius: 22px; border: 1.5px solid var(--line); box-shadow: none; background: transparent; }
 .ev thead th { padding: 14px 14px; font-size: 13px; font-weight: 600; color: var(--ink-2); border-bottom: 1.5px solid var(--line); }
 .ev thead th small { color: var(--ink-3); }
