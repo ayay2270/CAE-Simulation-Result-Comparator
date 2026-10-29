@@ -111,10 +111,11 @@
     }
 
     function assignedDesignIds() {
-      const live = new Set(C.state.variants.map((v) => v.id));
-      designOrder = designOrder.filter((id) => live.has(id));
-      C.state.variants.forEach((v) => { if (!designOrder.includes(v.id)) designOrder.push(v.id); });
-      return designOrder.filter((id) => id !== C.state.baselineId);
+      const live = C.state.variants.filter((v) => v.id !== C.state.baselineId).map((v) => v.id);
+      const allowed = new Set(live);
+      designOrder = designOrder.filter((id) => allowed.has(id));
+      live.forEach((id) => { if (!designOrder.includes(id)) designOrder.push(id); });
+      return designOrder.slice();
     }
 
     function assignDesignNumber(id, number) {
