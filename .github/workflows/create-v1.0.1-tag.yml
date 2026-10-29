@@ -1,0 +1,26 @@
+name: Create one-time release tag v1.0.1
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/create-v1.0.1-tag.yml']
+permissions:
+  contents: write
+jobs:
+  tag-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Tag reviewed merge commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git show-ref --verify --quiet refs/tags/v1.0.1; then
+            echo 'v1.0.1 already exists; no changes.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a v1.0.1 993b8289055698c94f4929030891974a9aaf0656 -m 'v1.0.1: Custom Unit input support'
+          git push origin refs/tags/v1.0.1
