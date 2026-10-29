@@ -47,13 +47,14 @@
     document.head.insertBefore(cardStyle, document.head.querySelector('style'));
 
 
-    let sortMode = 'result';            // result (worst → best, ends at the best design) | input
+    let sortMode = 'manual';            // manual design-number order by default; result order only by explicit choice
     let open = new Set();               // expanded detail rows
     let frozen = false, cache = null;   // keep row order stable while a number is being typed
     let approachOpen = false, undoMsg = '', undoT = null;
     let custom = {};                    // caseKey -> manually edited conclusion HTML
     let extra = {};                     // caseKey -> [{id, text}] free remarks
     let tableTitles = {};               // caseKey -> optional evidence table title
+    let designOrder = [];               // stable global variant IDs, independent of numerical performance
     let seq = 0;
     let last = null, rendering = false, pointerDown = false, resortT = null, resizeT = null, lastW = 0;
 
@@ -109,16 +110,36 @@
       return s;
     }
 
+    function assignedDesignIds() {
+      const live = C.state.variants.filter((v) => v.id !== C.state.baselineId).map((v) => v.id);
+      const allowed = new Set(live);
+      designOrder = designOrder.filter((id) => allowed.has(id));
+      live.forEach((id) => { if (!designOrder.includes(id)) designOrder.push(id); });
+      return designOrder.slice();
+    }
+
+    function assignDesignNumber(id, number) {
+      const designs = assignedDesignIds();
+      const other = designs[number - 1];
+      if (!other || !designs.includes(id) || other === id) return;
+      const from = designOrder.indexOf(id), to = designOrder.indexOf(other);
+      [designOrder[from], designOrder[to]] = [designOrder[to], designOrder[from]];
+      render();
+    }
+
     function orderedRows(ev) {
       const lower = ev.direction === 'lower';
       let ds = ev.designs.slice();
       if (sortMode === 'result') {
-        const key = (r) => (r.value === null ? Infinity : lower ? -r.value : r.value);   // worst first, best last, empty at the end
+        const key = (r) => (r.value === null ? Infinity : lower ? -r.value : r.value); // explicitly selected result order
         ds.sort((a, b) => key(a) - key(b));
         if (frozen && cache) {
           const idx = new Map(cache.map((id, i) => [id, i]));
           ds.sort((a, b) => (idx.has(a.id) ? idx.get(a.id) : 1e9) - (idx.has(b.id) ? idx.get(b.id) : 1e9));
         }
+      } else {
+        const manualIndex = new Map(assignedDesignIds().map((id, i) => [id, i]));
+        ds.sort((a, b) => (manualIndex.get(a.id) ?? Infinity) - (manualIndex.get(b.id) ?? Infinity));
       }
       const out = [ev.baseline].concat(ds).filter(Boolean);
       cache = out.filter((r) => !r.isBaseline).map((r) => r.id);
@@ -205,7 +226,9 @@
     function render() {
       const s = C.state, ev = C.evaluate(), u = ev.unit, lower = ev.direction === 'lower', b = ev.baseline, bd = ev.bestDesign;
       const rows = orderedRows(ev);
-      const designRank = {}; ev.designs.filter((r) => r.rank !== null).sort((a, c) => a.rank - c.rank).forEach((r, i) => (designRank[r.id] = i + 1));
+      const designRank = {};
+      assignedDesignIds().forEach((id, i) => { designRank[id] = i + 1; });
+      const designNumberOptions = (id) => ev.designs.map((_, i) => `<option value="${i + 1}" ${designRank[id] === i + 1 ? 'selected' : ''}>#${i + 1}</option>`).join('');
       const maxM = Math.max(1e-9, ...ev.rows.map((r) => (r.margin === null ? 0 : Math.abs(r.margin))));
       const arrow = (r, px) => (r.delta < 0 ? I('down', px) : r.delta > 0 ? I('up', px) : '');
 
@@ -271,10 +294,10 @@
             <div><dt>Utilisation of limit</dt><dd class="num">${r.util === null ? '—' : C.fmt(r.util * 100) + '%'}</dd></div>
             <div><dt>Margin to limit</dt><dd class="num">${r.marginPct === null ? '—' : (r.marginPct >= 0 ? '+' : '−') + C.fmtPct(Math.abs(r.marginPct))}</dd></div>
             <div><dt>Δ vs baseline</dt><dd class="num">${r.delta === null ? '—' : `${sgn(r.delta)}${C.fmt(Math.abs(r.delta))} ${E(u)}`}</dd></div>
-            <div><dt>Rank among variants</dt><dd class="num">${r.isBaseline ? 'baseline' : designRank[r.id] ? `${designRank[r.id]} of ${ev.designs.length}` : '—'}</dd></div></dl></td></tr>` : '';
+            <div><dt>Assigned design #</dt><dd class="num">${r.isBaseline ? 'baseline' : designRank[r.id] ? '#' + designRank[r.id] : '—'}</dd></div></dl></td></tr>` : '';
         return `
         <tr class="${r.isBaseline ? 'base' : ''} ${r.isBest && !r.isBaseline ? 'best' : ''} ${r.pass === false ? 'nok' : ''}">
-          <td><span class="role ${r.isBaseline ? 'b' : ''}">${r.isBaseline ? 'BASE' : '#' + (designRank[r.id] ?? '–')}${r.isBest && !r.isBaseline ? '<i>best</i>' : ''}</span></td>
+          <td><span class="role ${r.isBaseline ? 'b' : ''}">${r.isBaseline ? 'BASE' : `<select class="role-select noprint" data-act="designno" data-id="${E(r.id)}" aria-label="Set design number for ${E(r.name)}">${designNumberOptions(r.id)}</select><span class="role-print">#${designRank[r.id] ?? '–'}</span>`}${r.isBest && !r.isBaseline ? '<i>best</i>' : ''}</span></td>
           <td><input class="ti nm" data-k="n:${r.id}" data-act="name" data-id="${r.id}" value="${E(r.name)}" aria-label="Design name"><span class="subl">${r.isBaseline ? 'Comparison baseline' : E(r.tag)}</span></td>
           <td data-l="Description"><input class="ti ds" data-k="d:${r.id}" data-act="note" data-id="${r.id}" value="${E(r.note)}" placeholder="add description…" aria-label="${E(r.name)} description"></td>
           <td class="r" data-l="Result (${E(u)})"><input class="ti rv" data-k="v:${r.id}" data-act="val" data-id="${r.id}" inputmode="decimal" value="${r.value === null ? '' : r.value}" placeholder="—" aria-label="${E(r.name)} result in ${E(u)}"></td>
@@ -285,12 +308,12 @@
         </tr>${det}`;
       }).join('');
       const evid = {
-        sort: `<div class="seg noprint" role="group" aria-label="Row order"><button data-act="sort" data-v="result" aria-pressed="${sortMode === 'result'}">By result</button><button data-act="sort" data-v="input" aria-pressed="${sortMode === 'input'}">Input order</button></div><button class="btn sm noprint" data-act="copytable">${I('copy', 14)}<span>Copy table</span></button>`,
+        sort: `<div class="seg noprint" role="group" aria-label="Row order"><button data-act="sort" data-v="manual" aria-pressed="${sortMode === 'manual'}">By design #</button><button data-act="sort" data-v="result" aria-pressed="${sortMode === 'result'}">By result</button></div><button class="btn sm noprint" data-act="copytable">${I('copy', 14)}<span>Copy table</span></button>`,
         add: `<button class="btn noprint" data-act="add">${I('plus', 15)}Add design variant</button>`,
         table: `<div class="ev-title-editor noprint"><label for="evidence-table-title">Table title <span>(optional)</span></label><input id="evidence-table-title" data-k="tabletitle" data-act="tabletitle" type="text" autocomplete="off" placeholder="e.g. Rail tensile comparison" value="${E(tableTitles[kk()] || '')}" aria-label="Optional table title"></div>
         <h3 class="ev-table-title" data-role="table-title-preview" ${tableTitle ? '' : 'hidden'}>${E(tableTitle)}</h3>
         <div class="tw"><div class="twi"><table class="ev"><thead><tr>
-          <th>Role / rank</th><th>Design</th><th>Description</th><th class="r">Result<small>(${E(u)})</small></th><th>Change vs baseline</th><th>Reference margin<small>(to ${E(ev.refValue !== null ? C.fmt(ev.refValue) + ' ' + u : 'limit')})</small></th><th>State</th><th class="act">Actions</th>
+          <th>Role / design #</th><th>Design</th><th>Description</th><th class="r">Result<small>(${E(u)})</small></th><th>Change vs baseline</th><th>Reference margin<small>(to ${E(ev.refValue !== null ? C.fmt(ev.refValue) + ' ' + u : 'limit')})</small></th><th>State</th><th class="act">Actions</th>
         </tr></thead><tbody>${body}</tbody></table></div></div>`,
       };
 
@@ -404,6 +427,7 @@
       }
       else if (a === 'dir') C.setDirection(el.value);
       else if (a === 'baseline') C.setBaseline(el.value);
+      else if (a === 'designno') assignDesignNumber(el.dataset.id, Number(el.value));
     });
     app.addEventListener('focusout', (e) => {
       if (rendering || !e.target.dataset || e.target.dataset.act !== 'val') return;
@@ -421,7 +445,7 @@
       const el = e.target.closest('[data-act]'); if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
       const a = el.dataset.act, id = el.dataset.id;
       if (a === 'print') window.print();
-      else if (a === 'reset') { custom = {}; extra = {}; tableTitles = {}; open = new Set(); undoMsg = ''; C.reset(); }
+      else if (a === 'reset') { custom = {}; extra = {}; tableTitles = {}; designOrder = []; sortMode = 'manual'; open = new Set(); undoMsg = ''; C.reset(); }
       else if (a === 'approach') { approachOpen = !approachOpen; render(); }
       else if (a === 'sort') { sortMode = el.dataset.v; render(); }
       else if (a === 'base') C.setBaseline(id);
@@ -434,9 +458,9 @@
       else if (a === 'xrm') { const k = kk(); extra[k] = (extra[k] || []).filter((x) => x.id !== id); render(); }
       else if (a === 'copytable') {
         const ev = C.evaluate(), dataRows = last ? last.rows : orderedRows(ev);
-        const headers = ['Role', 'Design', 'Description', 'Result' + (ev.unit ? ' (' + ev.unit + ')' : ''), 'Change vs baseline', 'Reference margin', 'State'];
+        const headers = ['Role / Design #', 'Design', 'Description', 'Result' + (ev.unit ? ' (' + ev.unit + ')' : ''), 'Change vs baseline', 'Reference margin', 'State'];
         const values = dataRows.map((r) => [
-          r.isBaseline ? 'BASE' : r.tag, r.name, r.note || '', C.fmt(r.value),
+          r.isBaseline ? 'BASE' : '#' + (assignedDesignIds().indexOf(r.id) + 1), r.name, r.note || '', C.fmt(r.value),
           r.deltaPct === null ? '—' : C.fmtPct(r.deltaPct, { signed: true }),
           r.margin === null ? '—' : (r.margin >= 0 ? '+' : '−') + C.fmt(Math.abs(r.margin)),
           r.pass === null ? '—' : (r.pass ? 'PASS' : 'FAIL'),

@@ -125,6 +125,10 @@ button, select, input, .ti, .ctext, .btn, .badge, tr { transition: background-co
 .ev tbody tr.best:hover td { background: color-mix(in srgb, #8b9d83 46%, #e8dcc7); }
 .role { font-family: var(--font-head); font-size: 17px; font-weight: 600; color: var(--ink-2); font-variation-settings: "SOFT" 100; }
 .role.b { letter-spacing: .06em; font-size: 14px; color: var(--moss-d); }
+.role-select { appearance: auto; max-width: 68px; width: 65px; height: 32px; border: 1px solid var(--line); border-radius: 8px; padding: 3px 2px; background: var(--field-bg); font: inherit; color: var(--ink); cursor: pointer; }
+.role-select:hover, .role-select:focus { border-color: var(--moss-d); }
+.role-print { display: none; }
+@media print { .role-select { display: none !important; } .role-print { display: inline; } }
 .role i { font-family: var(--font); font-size: 11px; background: var(--moss-d); color: var(--sand); border-radius: 12px; padding: 3px 9px; margin-left: 8px; letter-spacing: .08em; }
 .ti { border-radius: 12px; padding: 5px 9px; margin: 0 -9px; width: calc(100% + 18px); }
 .ti:hover { background: rgba(42, 40, 28, .07); box-shadow: none; }
