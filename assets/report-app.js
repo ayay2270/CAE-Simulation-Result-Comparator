@@ -132,7 +132,7 @@
     }
     function chartSvg(ev, rows, W, P) {
       P = P || pal;
-      const u = ev.unit, narrow = W < 640, padL = narrow ? 118 : 176, padR = narrow ? 54 : 70, top = 44, pitch = 33, barH = 24, axisH = 52;
+      const u = ev.unit, narrow = W < 640, padL = narrow ? 118 : 176, padR = narrow ? 54 : 70, top = 44, pitch = 44, barH = 22, axisH = 52;
       const H = top + rows.length * pitch + axisH;
       const vals = rows.map((r) => r.value ?? 0).concat(ev.refValue !== null ? [ev.refValue] : []);
       const step = niceStep((Math.max(...vals, 1e-9) * 1.12) / 7), max = Math.ceil((Math.max(...vals, 1e-9) * 1.08) / step) * step;
@@ -185,8 +185,9 @@
       const arrow = (r, px) => (r.delta < 0 ? I('down', px) : r.delta > 0 ? I('up', px) : '');
 
       const anOpts = s.analyses.map((a) => `<option ${a === s.current.analysis ? 'selected' : ''}>${E(a)}</option>`).join('');
-      const meOpts = s.metrics.map((m) => `<option value="${m.key}" ${m.key === s.current.metric ? 'selected' : ''}>${E(m.name)}</option>`).join('');
-      const unOpts = (UNITS.includes(u) ? UNITS : UNITS.concat([u])).map((x) => `<option ${x === u ? 'selected' : ''}>${E(x)}</option>`).join('');
+      const meOpts = s.metrics.map((m) => `<option value="${m.key}" ${m.key === s.current.metric ? 'selected' : ''}>${E(m.name || 'Blank / Custom')}</option>`).join('');
+      const unitChoices = ['', ...UNITS]; if (u && !unitChoices.includes(u)) unitChoices.push(u);
+      const unOpts = unitChoices.map((x) => `<option value="${E(x)}" ${x === u ? 'selected' : ''}>${E(x || 'No unit')}</option>`).join('');
       const blOpts = ev.rows.map((r) => `<option value="${r.id}" ${r.isBaseline ? 'selected' : ''}>${E(r.name)}</option>`).join('');
 
       // header parts
@@ -198,7 +199,7 @@
       // setup fields
       const field = {
         analysis: `<label class="fld an"><span>Analysis</span><select data-act="analysis">${anOpts}</select></label>`,
-        metric: `<label class="fld me"><span>Metric</span><select data-act="metric">${meOpts}</select></label>`,
+        metric: `<label class="fld me"><span>Metric</span><select data-act="metric">${meOpts}</select>${C.metricByKey(s.current.metric).custom ? `<input style="margin-top:8px" data-k="metricname" data-act="metricname" value="${E(C.metricByKey(s.current.metric).name)}" placeholder="Enter metric name" aria-label="Custom metric name">` : ''}</label>`,
         unit: `<label class="fld un"><span>Unit</span><select data-act="unit">${unOpts}</select></label>`,
         reference: `<label class="fld rf"><span>Engineering reference</span><input data-k="rn" data-act="refname" value="${E(ev.ref.name)}" placeholder="e.g. Yield Stress"></label>`,
         limit: `<label class="fld lm"><span>Limit (${E(u)})</span><input class="mono-n" data-k="rv" data-act="refval" inputmode="decimal" value="${Number.isFinite(ev.ref.value) ? ev.ref.value : ''}" placeholder="none" title="Leave empty to hide the limit"></label>`,
@@ -256,7 +257,7 @@
         </tr>${det}`;
       }).join('');
       const evid = {
-        sort: `<div class="seg noprint" role="group" aria-label="Row order"><button data-act="sort" data-v="result" aria-pressed="${sortMode === 'result'}">By result</button><button data-act="sort" data-v="input" aria-pressed="${sortMode === 'input'}">Input order</button></div>`,
+        sort: `<div class="seg noprint" role="group" aria-label="Row order"><button data-act="sort" data-v="result" aria-pressed="${sortMode === 'result'}">By result</button><button data-act="sort" data-v="input" aria-pressed="${sortMode === 'input'}">Input order</button></div><button class="btn sm noprint" data-act="copytable">${I('copy', 14)}<span>Copy table</span></button>`,
         add: `<button class="btn noprint" data-act="add">${I('plus', 15)}Add design variant</button>`,
         table: `<div class="tw"><div class="twi"><table class="ev"><thead><tr>
           <th>Role / rank</th><th>Design</th><th>Description</th><th class="r">Result<small>(${E(u)})</small></th><th>Change vs baseline</th><th>Reference margin<small>(to ${E(ev.refValue !== null ? C.fmt(ev.refValue) + ' ' + u : 'limit')})</small></th><th>State</th><th class="act">Actions</th>
@@ -317,9 +318,12 @@
     }
     async function chartPng() {
       const svg = document.getElementById('chart'); const vb = svg.viewBox.baseVal;
-      const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(svg));
+      const exportSvg = svg.cloneNode(true);
+      const plate = exportSvg.querySelector('rect'); if (plate) plate.setAttribute('fill', '#ffffff');
+      const img = new Image(); img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(new XMLSerializer().serializeToString(exportSvg));
       await new Promise((res, rej) => { img.onload = res; img.onerror = rej; });
-      const c = document.createElement('canvas'); c.width = vb.width * 2; c.height = vb.height * 2; c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      const c = document.createElement('canvas'); c.width = vb.width * 2; c.height = vb.height * 2;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
       return new Promise((res) => c.toBlob(res, 'image/png'));
     }
 
@@ -336,6 +340,7 @@
       if (a === 'name') typing(() => C.setName(id, el.value));
       else if (a === 'note') typing(() => C.setNote(id, el.value));
       else if (a === 'val') typing(() => C.setValue(id, el.value));
+      else if (a === 'metricname') typing(() => { C.metricByKey(C.state.current.metric).name = el.value; C.emit(); });
       else if (a === 'refname') typing(() => C.setRef({ name: el.value }));
       else if (a === 'refval') typing(() => C.setRef({ value: el.value }));
       else if (a === 'xrem') { const x = (extra[kk()] || []).find((y) => y.id === id); if (x) x.text = el.value; }
@@ -376,6 +381,21 @@
       else if (a === 'regen') { delete custom[kk()]; render(); }
       else if (a === 'addrem') { const k = kk(); (extra[k] = extra[k] || []).push({ id: 'x' + ++seq, text: '' }); render(); const inp = [...document.querySelectorAll('#rl input')].pop(); if (inp) inp.focus(); }
       else if (a === 'xrm') { const k = kk(); extra[k] = (extra[k] || []).filter((x) => x.id !== id); render(); }
+      else if (a === 'copytable') {
+        const ev = C.evaluate(), dataRows = last ? last.rows : orderedRows(ev);
+        const headers = ['Role', 'Design', 'Description', 'Result' + (ev.unit ? ' (' + ev.unit + ')' : ''), 'Change vs baseline', 'Reference margin', 'State'];
+        const values = dataRows.map((r) => [
+          r.isBaseline ? 'BASE' : r.tag, r.name, r.note || '', C.fmt(r.value),
+          r.deltaPct === null ? '—' : C.fmtPct(r.deltaPct, { signed: true }),
+          r.margin === null ? '—' : (r.margin >= 0 ? '+' : '−') + C.fmt(Math.abs(r.margin)),
+          r.pass === null ? '—' : (r.pass ? 'PASS' : 'FAIL'),
+        ]);
+        const cellStyle = 'background-color:#ffffff!important;color:#111111;border:1px solid #cccccc;padding:7px 10px;text-align:left;';
+        const cells = (items, tag) => '<tr>' + items.map((x) => '<' + tag + ' style="' + cellStyle + '">' + E(x) + '</' + tag + '>').join('') + '</tr>';
+        const html = '<table style="border-collapse:collapse;background-color:#ffffff;color:#111111;">' + cells(headers, 'th') + values.map((row) => cells(row, 'td')).join('') + '</table>';
+        const plain = [headers, ...values].map((row) => row.join('\t')).join('\n');
+        flashBtn(el, await copyRich(html, plain), 'Copy table');
+      }
       else if (a === 'copyconcl') { const d = document.getElementById('concl'); flashBtn(el, await copyRich(`<p>${d.innerHTML}</p>`, d.innerText.trim()), 'Copy to report'); }
       else if (a === 'copyrem') {
         const items = remarkItems(C.evaluate()).filter((it) => it.text.trim() || it.v);
