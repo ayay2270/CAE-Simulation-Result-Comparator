@@ -186,8 +186,10 @@
 
       const anOpts = s.analyses.map((a) => `<option ${a === s.current.analysis ? 'selected' : ''}>${E(a)}</option>`).join('');
       const meOpts = s.metrics.map((m) => `<option value="${m.key}" ${m.key === s.current.metric ? 'selected' : ''}>${E(m.name || 'Blank / Custom')}</option>`).join('');
-      const unitChoices = ['', ...UNITS]; if (u && !unitChoices.includes(u)) unitChoices.push(u);
-      const unOpts = unitChoices.map((x) => `<option value="${E(x)}" ${x === u ? 'selected' : ''}>${E(x || 'No unit')}</option>`).join('');
+      const metricDef = C.metricByKey(s.current.metric);
+      const customUnitActive = metricDef.customUnit === true || !!(u && !UNITS.includes(u));
+      const unOpts = ['', ...UNITS].map((x) => `<option value="${E(x)}" ${!customUnitActive && x === u ? 'selected' : ''}>${E(x || 'No unit')}</option>`).join('') +
+        `<option value="__custom__" ${customUnitActive ? 'selected' : ''}>Custom / type a unit…</option>`;
       const blOpts = ev.rows.map((r) => `<option value="${r.id}" ${r.isBaseline ? 'selected' : ''}>${E(r.name)}</option>`).join('');
 
       // header parts
@@ -200,7 +202,7 @@
       const field = {
         analysis: `<label class="fld an"><span>Analysis</span><select data-act="analysis">${anOpts}</select></label>`,
         metric: `<label class="fld me"><span>Metric</span><select data-act="metric">${meOpts}</select>${C.metricByKey(s.current.metric).custom ? `<input style="margin-top:8px" data-k="metricname" data-act="metricname" value="${E(C.metricByKey(s.current.metric).name)}" placeholder="Enter metric name" aria-label="Custom metric name">` : ''}</label>`,
-        unit: `<label class="fld un"><span>Unit</span><select data-act="unit">${unOpts}</select></label>`,
+        unit: `<label class="fld un"><span>Unit</span><select data-act="unit">${unOpts}</select>${customUnitActive ? `<input style="margin-top:8px" data-k="customunit" data-act="customunit" value="${E(u)}" placeholder="e.g. mm/s², G, N/mm" aria-label="Enter custom unit" autocomplete="off">` : ""}</label>`,
         reference: `<label class="fld rf"><span>Engineering reference</span><input data-k="rn" data-act="refname" value="${E(ev.ref.name)}" placeholder="e.g. Yield Stress"></label>`,
         limit: `<label class="fld lm"><span>Limit (${E(u)})</span><input class="mono-n" data-k="rv" data-act="refval" inputmode="decimal" value="${Number.isFinite(ev.ref.value) ? ev.ref.value : ''}" placeholder="none" title="Leave empty to hide the limit"></label>`,
         direction: `<label class="fld dr"><span>Preferred direction</span><select data-act="dir"><option value="lower" ${lower ? 'selected' : ''}>Lower is better</option><option value="higher" ${!lower ? 'selected' : ''}>Higher is better</option></select></label>`,
@@ -341,6 +343,10 @@
       else if (a === 'note') typing(() => C.setNote(id, el.value));
       else if (a === 'val') typing(() => C.setValue(id, el.value));
       else if (a === 'metricname') typing(() => { C.metricByKey(C.state.current.metric).name = el.value; C.emit(); });
+      else if (a === 'customunit') typing(() => {
+        const met = C.metricByKey(C.state.current.metric);
+        met.customUnit = true; met.unit = el.value; met.customUnitText = el.value; C.emit();
+      });
       else if (a === 'refname') typing(() => C.setRef({ name: el.value }));
       else if (a === 'refval') typing(() => C.setRef({ value: el.value }));
       else if (a === 'xrem') { const x = (extra[kk()] || []).find((y) => y.id === id); if (x) x.text = el.value; }
@@ -350,7 +356,16 @@
       const el = e.target, a = el.dataset.act;
       if (a === 'analysis') C.setAnalysis(el.value);
       else if (a === 'metric') C.setMetric(el.value);
-      else if (a === 'unit') { C.metricByKey(C.state.current.metric).unit = el.value; C.emit(); }
+      else if (a === 'unit') {
+        const met = C.metricByKey(C.state.current.metric);
+        if (el.value === '__custom__') {
+          met.customUnit = true; met.unit = met.customUnitText || ''; C.emit();
+          const input = app.querySelector('[data-act="customunit"]'); if (input) input.focus();
+        } else {
+          if (met.customUnit || (met.unit && !UNITS.includes(met.unit))) met.customUnitText = met.unit;
+          met.customUnit = false; met.unit = el.value; C.emit();
+        }
+      }
       else if (a === 'dir') C.setDirection(el.value);
       else if (a === 'baseline') C.setBaseline(el.value);
     });
