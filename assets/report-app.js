@@ -53,6 +53,7 @@
     let approachOpen = false, undoMsg = '', undoT = null;
     let custom = {};                    // caseKey -> manually edited conclusion HTML
     let extra = {};                     // caseKey -> [{id, text}] free remarks
+    let tableTitles = {};               // caseKey -> optional evidence table title
     let seq = 0;
     let last = null, rendering = false, pointerDown = false, resortT = null, resizeT = null, lastW = 0;
 
@@ -233,6 +234,7 @@
       kpi.row = `<div class="kpis">${kpi.result}${kpi.improvement}${kpi.margin}</div>`;
 
       // 02 evidence
+      const tableTitle = (tableTitles[kk()] || '').trim();
       const body = rows.map((r) => {
         const chg = r.isBaseline ? `<span class="chg z">—</span><span class="chg-s">Reference design</span>`
           : r.deltaPct === null ? `<span class="chg z">—</span>`
@@ -261,7 +263,9 @@
       const evid = {
         sort: `<div class="seg noprint" role="group" aria-label="Row order"><button data-act="sort" data-v="result" aria-pressed="${sortMode === 'result'}">By result</button><button data-act="sort" data-v="input" aria-pressed="${sortMode === 'input'}">Input order</button></div><button class="btn sm noprint" data-act="copytable">${I('copy', 14)}<span>Copy table</span></button>`,
         add: `<button class="btn noprint" data-act="add">${I('plus', 15)}Add design variant</button>`,
-        table: `<div class="tw"><div class="twi"><table class="ev"><thead><tr>
+        table: `<div class="ev-title-editor noprint"><label for="evidence-table-title">Table title <span>(optional)</span></label><input id="evidence-table-title" data-k="tabletitle" data-act="tabletitle" type="text" autocomplete="off" placeholder="e.g. Rail tensile comparison" value="${E(tableTitles[kk()] || '')}" aria-label="Optional table title"></div>
+        <h3 class="ev-table-title" data-role="table-title-preview" ${tableTitle ? '' : 'hidden'}>${E(tableTitle)}</h3>
+        <div class="tw"><div class="twi"><table class="ev"><thead><tr>
           <th>Role / rank</th><th>Design</th><th>Description</th><th class="r">Result<small>(${E(u)})</small></th><th>Change vs baseline</th><th>Reference margin<small>(to ${E(ev.refValue !== null ? C.fmt(ev.refValue) + ' ' + u : 'limit')})</small></th><th>State</th><th class="act">Actions</th>
         </tr></thead><tbody>${body}</tbody></table></div></div>`,
       };
@@ -347,6 +351,11 @@
         const met = C.metricByKey(C.state.current.metric);
         met.customUnit = true; met.unit = el.value; met.customUnitText = el.value; C.emit();
       });
+      else if (a === 'tabletitle') {
+        tableTitles[kk()] = el.value;
+        const preview = app.querySelector('[data-role="table-title-preview"]');
+        if (preview) { preview.textContent = el.value.trim(); preview.hidden = !el.value.trim(); }
+      }
       else if (a === 'refname') typing(() => C.setRef({ name: el.value }));
       else if (a === 'refval') typing(() => C.setRef({ value: el.value }));
       else if (a === 'xrem') { const x = (extra[kk()] || []).find((y) => y.id === id); if (x) x.text = el.value; }
@@ -385,7 +394,7 @@
       const el = e.target.closest('[data-act]'); if (!el || el.tagName === 'INPUT' || el.tagName === 'SELECT') return;
       const a = el.dataset.act, id = el.dataset.id;
       if (a === 'print') window.print();
-      else if (a === 'reset') { custom = {}; extra = {}; open = new Set(); undoMsg = ''; C.reset(); }
+      else if (a === 'reset') { custom = {}; extra = {}; tableTitles = {}; open = new Set(); undoMsg = ''; C.reset(); }
       else if (a === 'approach') { approachOpen = !approachOpen; render(); }
       else if (a === 'sort') { sortMode = el.dataset.v; render(); }
       else if (a === 'base') C.setBaseline(id);
@@ -407,8 +416,10 @@
         ]);
         const cellStyle = 'background-color:#ffffff!important;color:#111111;border:1px solid #cccccc;padding:7px 10px;text-align:left;';
         const cells = (items, tag) => '<tr>' + items.map((x) => '<' + tag + ' style="' + cellStyle + '">' + E(x) + '</' + tag + '>').join('') + '</tr>';
-        const html = '<table style="border-collapse:collapse;background-color:#ffffff;color:#111111;">' + cells(headers, 'th') + values.map((row) => cells(row, 'td')).join('') + '</table>';
-        const plain = [headers, ...values].map((row) => row.join('\t')).join('\n');
+        const tableTitle = (tableTitles[kk()] || '').trim();
+        const caption = tableTitle ? '<caption style="caption-side:top;text-align:left;background-color:#ffffff;color:#111111;font-size:18px;font-weight:700;padding:10px 0;">' + E(tableTitle) + '</caption>' : '';
+        const html = '<table style="border-collapse:collapse;background-color:#ffffff;color:#111111;">' + caption + cells(headers, 'th') + values.map((row) => cells(row, 'td')).join('') + '</table>';
+        const plain = (tableTitle ? tableTitle + '\n' : '') + [headers, ...values].map((row) => row.join('\t')).join('\n');
         flashBtn(el, await copyRich(html, plain), 'Copy table');
       }
       else if (a === 'copyconcl') { const d = document.getElementById('concl'); flashBtn(el, await copyRich(`<p>${d.innerHTML}</p>`, d.innerText.trim()), 'Copy to report'); }
