@@ -458,7 +458,7 @@
       else if (a === 'xrm') { const k = kk(); extra[k] = (extra[k] || []).filter((x) => x.id !== id); render(); }
       else if (a === 'copytable') {
         const ev = C.evaluate(), dataRows = last ? last.rows : orderedRows(ev);
-        const headers = ['Role', 'Design', 'Description', 'Result' + (ev.unit ? ' (' + ev.unit + ')' : ''), 'Change vs baseline', 'Reference margin', 'State'];
+        const headers = ['Role / Design #', 'Design', 'Description', 'Result' + (ev.unit ? ' (' + ev.unit + ')' : ''), 'Change vs baseline', 'Reference margin', 'State'];
         const values = dataRows.map((r) => [
           r.isBaseline ? 'BASE' : '#' + (assignedDesignIds().indexOf(r.id) + 1), r.name, r.note || '', C.fmt(r.value),
           r.deltaPct === null ? '—' : C.fmtPct(r.deltaPct, { signed: true }),
